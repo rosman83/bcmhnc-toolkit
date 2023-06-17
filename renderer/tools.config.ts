@@ -1,6 +1,6 @@
 const Tools = [
   {
-    name: 'XPRA Analysis',
+    name: 'Analysis Pipeline',
     description: 'Input genetic result files from assorted folder and assign groups to obtain combined spreadsheet of statistical tests, adjusted for error',
     path: '/tools/xpra',
   },

@@ -1,6 +1,6 @@
 {
-  "private": true,
-  "name": "xpra-electron",
+  "private": false,
+  "name": "bcmhnc-toolkit",
   "description": "...",
   "version": "1.0.0",
   "author": "Rashid Osman <rashid.osman@vanderbilt.edu>",
@@ -37,7 +37,6 @@
     "recoil": "^0.7.7"
   },
   "devDependencies": {
-    "@types/electron-progressbar": "^1.2.2",
     "@types/node": "^18.11.18",
     "@types/react": "^18.0.26",
     "autoprefixer": "^10.4.14",

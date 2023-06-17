@@ -34,9 +34,9 @@ async function XPRA(args) {
   });
 
   await Checker(args.files, args.ext, progressBar);
-  //await Reader(progressBar);
- // await Combine(progressBar);
-  //await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
+  await Reader(progressBar);
+  await Combine(progressBar);
+  await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
   const file = await Report();
   progressBar.setCompleted();
 
@@ -475,7 +475,7 @@ const Report = async () => {
 
   const final_file = await zip.toBuffer()
   // delete results folder
-  // await fs.rmSync(path.resolve(__dirname, `results`), { recursive: true });
+  await fs.rmSync(path.resolve(__dirname, `results`), { recursive: true });
   return final_file;
 }
 
