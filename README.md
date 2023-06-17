@@ -1,9 +1,9 @@
 # BCM Pipeline Toolkit
 
 <p align="center">
-      <img src="https://img.shields.io/badge/Electron-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9" align="left">
+      <img src="https://img.shields.io/badge/Electron-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9">
       <img src="https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white">
-      <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" align="right">
+      <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white">
 </p>
 
 Tools used for Head and Neck Cancer research at Baylor College of Medicine, with a goal of condensing time-consuming manual pipelines of data analysis methods into one click scanning processes.
@@ -11,7 +11,7 @@ Tools used for Head and Neck Cancer research at Baylor College of Medicine, with
 
 ## Preview
 
-![Animated Preview](https://via.placeholder.com/468x300?text=App+Screenshot+Here)
+![Animated Preview](https://github.com/rosman83/bcmhnc-toolkit/blob/main/resources/preview.gif)
 ## Installation
 
 To run the electron application in development mode, clone or download the folder and run:
