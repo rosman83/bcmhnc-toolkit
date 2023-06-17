@@ -18,18 +18,18 @@ const ResultsLog = function (props) {
                             {report.success ? `Your analysis report is ready, successfully created ${report.time.toLocaleTimeString()}` : `Your analysis report failed to create at ${report.time.toLocaleTimeString()}`}
                           </p>
                         </div>
-                        <div>
+                        <div>{/* 
                           { report.success &&
                             <button type='button' className='hover:bg-green-600 hover:bg-opacity-20 font-semibold py-2 px-4 rounded-md transition duration-200'>
                               <FolderOpenIcon className='h-4 w-4' />
                             </button>
-                          }
-                          <button type='button'
+                          } */}
+                          {/* <button type='button'
                             onClick={() => props.func(report)}
                             className={`hover:bg-opacity-20 font-semibold py-2 px-4 rounded-md transition duration-200 ${report.success ? 'hover:bg-green-600' : 'hover:bg-red-600'}`}
                            >
                             <XMarkIcon className='h-4 w-4' />
-                          </button>
+                          </button> */}
                         </div>
                       </div>
                     ))}

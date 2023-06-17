@@ -4,9 +4,9 @@ async function InitSettings() {
   const genepattern_exists = await settings.has('genepattern')
   if (!genepattern_exists) {
     await settings.set('genepattern', {
-      url: 'https://cloud.genepattern.org/gp',
-      username: 'sipera3417',
-      password: '596Ju%sh@R^Y'
+      url: 'https://gp.bcmhnc.com/gp',
+      username: '',
+      password: ''
     });
   }
 

@@ -27,7 +27,7 @@ function Shell(props) {
       {/* Tab panel */}
       <ul className='px-4 pt-4 bg-primary flex flex-wrap text-sm font-medium text-center text-gray-500'>
         <li className="">
-            <a href="/home" className={`inline-block pb-3 p-2 px-6 ${ (route == '/home') ? "active bg-gray-100 text-gray-600 " : "transition duration-200 hover:bg-gray-300"}`}>Welcome</a>
+            <Link href="/home" className={`inline-block pb-3 p-2 px-6 ${ (route == '/home') ? "active bg-gray-100 text-gray-600 " : "transition duration-200 hover:bg-gray-300"}`}>Welcome</Link>
         </li>
         {(Tools.map((tool, i) => (
           <li className="mr-2" key={i}>
@@ -35,9 +35,9 @@ function Shell(props) {
           </li>
         )))}
         <li className="">
-            <a href="/settings" className={`inline-block pb-3 p-2 px-6 flex items-center justify-center ${(route == '/settings') ? "active bg-gray-100 text-gray-600 " : "transition duration-200 hover:bg-gray-300"}`}>
+            <Link href="/settings" className={`inline-block pb-3 p-2 px-6 flex items-center justify-center ${(route == '/settings') ? "active bg-gray-100 text-gray-600 " : "transition duration-200 hover:bg-gray-300"}`}>
               <Cog6ToothIcon className='inline-block w-5 h-5' />
-          </a>
+          </Link>
         </li>
       </ul>
       <div className='h-full overflow-y-scroll  bg-gray-200'>

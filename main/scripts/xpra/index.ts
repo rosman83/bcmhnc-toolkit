@@ -34,9 +34,9 @@ async function XPRA(args) {
   });
 
   await Checker(args.files, args.ext, progressBar);
-  await Reader(progressBar);
-  await Combine(progressBar);
-  await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
+  //await Reader(progressBar);
+ // await Combine(progressBar);
+  //await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
   const file = await Report();
   progressBar.setCompleted();
 
@@ -174,43 +174,22 @@ const Combine = async (progressBar) => {
 
   // Loop through all CSV in prelim folder
   let filteredArray = [];
+  let reportedgenes = [];
+  
 
   for (const folderobj of store.folders as any) {
     let folder = folderobj.sample_header;
-    const filePath = path.resolve(__dirname, `results/prelim/${folder}_clean.csv`)
-    const preParsedArray = await csv({ delimiter: ',' }).fromFile(filePath);
+    const preParsedArray = await csv({ delimiter: ',' })
+      .fromFile(path.resolve(__dirname, `results/prelim/${folderobj.sample_header}_clean.csv`));
     const parsedArray = preParsedArray.filter((item) => (Number(item.effective_length) !== 0))
 
-    // Identify genes with effective_length column is 0 edge case, 
-    // get rid of it but generate a report, see raw values and gene lengths where this happens
-    // gives effectivelength, expected count for eevry gene and all samples
+    // Identify genes with effective_length column is 0 edge case, get rid of it but generate a report, see raw values and gene lengths where this happens.
 
-    // Filter out every item in which the item.effective_length is 0
     filteredArray = preParsedArray.filter((item) => Number(item.effective_length) == 0);
-    // If the filteredArray is not empty, create a report
     if (filteredArray.length > 0) {
-      // Create a new CSV file with the following headers: gene_id, gene_name, symbol, length, effective_length, expected_count, FPKM
-      // Create a reports folder if it doesn't exist
-      if (!fs.existsSync(path.resolve(__dirname, `results/reports`))) {
-        fs.mkdirSync(path.resolve(__dirname, `results/reports`));
+      for (const item of filteredArray) {
+        reportedgenes.push(item);
       }
-
-      const reportFilePath = path.resolve(__dirname, `results/reports/${folder}_edge_cases_report.csv`)
-      const reportWriter = await createCsvWriter({
-        path: reportFilePath,
-        header: [
-          { id: 'gene_id', title: 'gene_id' },
-          { id: 'gene_name', title: 'gene_name' },
-          { id: 'symbol', title: 'symbol' },
-          { id: 'length', title: 'length' },
-          { id: 'effective_length', title: 'effective_length' },
-          { id: 'expected_count', title: 'expected_count' },
-          { id: 'FPKM', title: 'FPKM' }
-        ]
-      });
-      // Write the filteredArray to the report file
-      await reportWriter.writeRecords(filteredArray);
-      // TODO: Let the user know that a report was generated and that certain edge cases were found - This should be a part of the zip file being saved below - I've done this but compile it all into a single file for minimalism
     }
 
     progressBar.detail = 'Normalizing ' + folderobj.sample_header + `... (${store.folders.indexOf(folderobj) + 1}/${store.folders.length})`;
@@ -270,6 +249,28 @@ const Combine = async (progressBar) => {
     log2Array.sort((a, b) => (a.symbol > b.symbol) ? 1 : -1);
     combinedArray.sort((a, b) => (a.symbol > b.symbol) ? 1 : -1);
   }
+
+  // Create a new CSV file with the following headers: gene_id, gene_name, symbol, length, effective_length, expected_count, FPKM
+  // create results/reports folder if it does not exist
+  if (!fs.existsSync(path.resolve(__dirname, 'results/reports'))) {
+    fs.mkdirSync(path.resolve(__dirname, 'results/reports'));
+  }
+
+  const reportFilePath = path.resolve(__dirname, `results/reports/edge_cases_report.csv`)
+  const reportWriter = await createCsvWriter({
+    path: reportFilePath,
+    header: [
+      { id: 'gene_id', title: 'gene_id' },
+      { id: 'gene_name', title: 'gene_name' },
+      { id: 'symbol', title: 'symbol' },
+      { id: 'length', title: 'length' },
+      { id: 'effective_length', title: 'effective_length' },
+      { id: 'expected_count', title: 'expected_count' },
+      { id: 'FPKM', title: 'FPKM' }
+    ]
+  });
+  // Write the filteredArray to the report file
+  await reportWriter.writeRecords(reportedgenes);
 
   // Save CSV to file
   await linearWriter.writeRecords(linearArray);
@@ -474,7 +475,7 @@ const Report = async () => {
 
   const final_file = await zip.toBuffer()
   // delete results folder
-  await fs.rmdirSync(path.resolve(__dirname, `results`), { recursive: true });
+  // await fs.rmSync(path.resolve(__dirname, `results`), { recursive: true });
   return final_file;
 }
 
