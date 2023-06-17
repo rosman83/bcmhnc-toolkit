@@ -5,6 +5,12 @@
   "version": "1.0.0",
   "author": "Rashid Osman <rashid.osman@vanderbilt.edu>",
   "main": "app/background.js",
+  "build": {
+    "appId": "bcmhnc.toolkit",
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    }
+  },
   "scripts": {
     "dev": "nextron",
     "postinstall": "electron-builder install-app-deps",

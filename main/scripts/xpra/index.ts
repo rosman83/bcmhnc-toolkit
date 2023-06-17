@@ -4,6 +4,7 @@ import fs from "fs"
 import padjust from '@stdlib/stats-padjust';
 import ttest2 from '@stdlib/stats-ttest2';
 import AdmZip from "adm-zip";
+import { createArrayCsvStringifier, createObjectCsvStringifier } from "csv-writer";
 
 const ProgressBar = require('electron-progressbar');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
@@ -19,13 +20,21 @@ const store: DataStore = {
   folders: [],
 };
 
-async function XPRA(args) {
-  //Create an indeterminate progress bar
+const prelim_results = [];
+const reports_file_store = [];
+const combined_file_store = [];
+const linear_file_store = [];
+const log2_file_store = [];
+const analysis_file_store = [];
+
+async function XPRA(args, mainWindow) {
   const progressBar = new ProgressBar({
     indeterminate: true,
     text: 'Preparing to analyze data...',
     detail: 'Please wait...',
     browserWindow: {
+      parent: mainWindow,
+      modal: true,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
@@ -47,7 +56,6 @@ async function XPRA(args) {
 }
 
 const Checker = async (files, ext, progressBar) => {
-  progressBar.detail = 'Preparing to scan files...';
   const scannedFiles = [];
   async function getFormattedEXT() {
     if (ext.toLowerCase() == 'results') return 'genes.results'
@@ -68,15 +76,6 @@ const Checker = async (files, ext, progressBar) => {
 }
 
 const Reader = async (progressBar) => {
-  progressBar.detail = 'Creating future result folders...';
-  const resultsFolderPath = path.resolve(__dirname, `results`)
-  if (!fs.existsSync(resultsFolderPath)) {
-    fs.mkdirSync(resultsFolderPath);
-    fs.mkdirSync(path.resolve(__dirname, `results/prelim`));
-    fs.mkdirSync(path.resolve(__dirname, `results/final`));
-  }
-
-
   for (const folderobj of store.folders as any) {
     let folder = folderobj.sample_header;
     const filePath = path.resolve(folderobj.sample_path)
@@ -94,13 +93,9 @@ const Reader = async (progressBar) => {
       }
     }
 
-    progressBar.detail = `Writing filtered version of ${folderobj.sample_header} to file...`;
+    progressBar.detail = `Saving filtered version of ${folderobj.sample_header}...`;
 
-    // Write the cleaned results to a new file
-    const cleanedFilePath = path.resolve(__dirname, `results/prelim/${folder}_clean.csv`)
-
-    const csvWriter = createCsvWriter({
-      path: cleanedFilePath,
+    const csvWriter = createObjectCsvStringifier({
       header: [
         { id: 'gene_id', title: 'gene_id' },
         { id: 'gene_name', title: 'gene_name' },
@@ -114,27 +109,29 @@ const Reader = async (progressBar) => {
       ]
     });
 
-    await csvWriter.writeRecords(cleanedResults)
+    // NEW AREA
+    prelim_results.push({
+      folder: folder,
+      csv_string: csvWriter.getHeaderString() + '\t' +csvWriter.stringifyRecords(cleanedResults)
+    })
+
   }
 }
 
 const Combine = async (progressBar) => {
   progressBar.detail = 'Setting file paths for thresholded testing...';
-
-  const combinedFilePath = path.resolve(__dirname, `results/prelim/both_combined.csv`)
-  const linearFilePath = path.resolve(__dirname, `results/prelim/linear_combined.csv`)
-  const log2FilePath = path.resolve(__dirname, `results/prelim/log2_combined.csv`)
-
+  let filteredArray = [];
+  let reportedgenes = [];
   const headers = [];
+  const linearArray = [];
+  const log2Array = [];
+  const combinedArray = [];
+
   for (const folderobj of store.folders as any) {
     let folder = folderobj.sample_header;
     headers.push({ id: folder, title: folder })
   }
-
-  // Linearized CSV Writer & Array
-  const linearArray = [];
-  const linearWriter = await createCsvWriter({
-    path: linearFilePath,
+  const linearWriter = createObjectCsvStringifier({
     header: [
       { id: 'gene_id', title: 'gene_id' },
       { id: 'gene_name', title: 'gene_name' },
@@ -142,12 +139,7 @@ const Combine = async (progressBar) => {
       ...headers
     ]
   });
-
-
-  // Log 2 CSV Writer & Array
-  const log2Array = [];
-  const log2Writer = await createCsvWriter({
-    path: log2FilePath,
+  const log2Writer = createObjectCsvStringifier({
     header: [
       { id: 'gene_id', title: 'gene_id' },
       { id: 'gene_name', title: 'gene_name' },
@@ -155,14 +147,10 @@ const Combine = async (progressBar) => {
       ...headers
     ]
   });
-
-  // Combined CSV Writer & Array
-  const combinedArray = [];
   const modifiedLog2Headers = headers.map((header) => {
     return { id: header.id + '_log2', title: header.id + '_log2' }
   })
-  const combinedWriter = await createCsvWriter({
-    path: combinedFilePath,
+  const combinedWriter = createObjectCsvStringifier({
     header: [
       { id: 'gene_id', title: 'gene_id' },
       { id: 'gene_name', title: 'gene_name' },
@@ -171,29 +159,20 @@ const Combine = async (progressBar) => {
       ...modifiedLog2Headers
     ]
   });
-
-  // Loop through all CSV in prelim folder
-  let filteredArray = [];
-  let reportedgenes = [];
-  
-
   for (const folderobj of store.folders as any) {
     let folder = folderobj.sample_header;
-    const preParsedArray = await csv({ delimiter: ',' })
-      .fromFile(path.resolve(__dirname, `results/prelim/${folderobj.sample_header}_clean.csv`));
+    const preParsedArray = await csv({}).fromString(
+      prelim_results.find((item) => item.folder == folderobj.sample_header).csv_string
+    )
     const parsedArray = preParsedArray.filter((item) => (Number(item.effective_length) !== 0))
-
-    // Identify genes with effective_length column is 0 edge case, get rid of it but generate a report, see raw values and gene lengths where this happens.
-
     filteredArray = preParsedArray.filter((item) => Number(item.effective_length) == 0);
     if (filteredArray.length > 0) {
       for (const item of filteredArray) {
+        item.source_file = folderobj.sample_header;
         reportedgenes.push(item);
       }
     }
-
     progressBar.detail = 'Normalizing ' + folderobj.sample_header + `... (${store.folders.indexOf(folderobj) + 1}/${store.folders.length})`;
-
     // Get the %75th percentile of the expected_count column
     const expectedCountArray = parsedArray.filter((item) => (Number(item.expected_count) !== 0)).map((item) => item.expected_count);
     const expectedCountArrayFiltered = expectedCountArray.filter(item => item !== null);
@@ -201,7 +180,6 @@ const Combine = async (progressBar) => {
     const expectedCountArrayLength = expectedCountArraySorted.length;
     const expectedCountArrayIndex = Math.floor(expectedCountArrayLength * 0.75);
     const expectedCountArrayPercentile = expectedCountArraySorted[expectedCountArrayIndex];
-
 
     // Loop through each row in the CSV
     for (const row of parsedArray) {
@@ -250,16 +228,9 @@ const Combine = async (progressBar) => {
     combinedArray.sort((a, b) => (a.symbol > b.symbol) ? 1 : -1);
   }
 
-  // Create a new CSV file with the following headers: gene_id, gene_name, symbol, length, effective_length, expected_count, FPKM
-  // create results/reports folder if it does not exist
-  if (!fs.existsSync(path.resolve(__dirname, 'results/reports'))) {
-    fs.mkdirSync(path.resolve(__dirname, 'results/reports'));
-  }
-
-  const reportFilePath = path.resolve(__dirname, `results/reports/edge_cases_report.csv`)
-  const reportWriter = await createCsvWriter({
-    path: reportFilePath,
+  const reportWriter = await createObjectCsvStringifier({
     header: [
+      { id: 'source_file', title: 'source_file' },
       { id: 'gene_id', title: 'gene_id' },
       { id: 'gene_name', title: 'gene_name' },
       { id: 'symbol', title: 'symbol' },
@@ -269,43 +240,30 @@ const Combine = async (progressBar) => {
       { id: 'FPKM', title: 'FPKM' }
     ]
   });
-  // Write the filteredArray to the report file
-  await reportWriter.writeRecords(reportedgenes);
 
-  // Save CSV to file
-  await linearWriter.writeRecords(linearArray);
-  await log2Writer.writeRecords(log2Array);
-  await combinedWriter.writeRecords(combinedArray);
+  reports_file_store.push({ csv_string: await reportWriter.getHeaderString() + '\t' +await reportWriter.stringifyRecords(reportedgenes) });
+  linear_file_store.push({ csv_string: await linearWriter.getHeaderString() + '\t' +await linearWriter.stringifyRecords(linearArray) });
+  log2_file_store.push({ csv_string: await log2Writer.getHeaderString() + '\t' +await log2Writer.stringifyRecords(log2Array) });
+  combined_file_store.push({ csv_string: await combinedWriter.getHeaderString() + '\t' + await combinedWriter.stringifyRecords(combinedArray) });
 }
 
 const Analysis = async (threshold, fdr, topGroup, progressBar) => {
-  progressBar.detail = 'Loading filtered files for tests...'
-  // Ensure the both_combined.csv file exists
-  const bothCombinedFilePath = await path.resolve(__dirname, `results/prelim/both_combined.csv`)
-  if (!fs.existsSync(bothCombinedFilePath)) {
-    throw new Error('Creating the combined form of the log2 and log2 results previously failed. Could not continue with analysis.')
-  }
-
-  // Read the both_combined.csv file
-  const bothCombinedArray = await csv({ delimiter: ',' }).fromFile(bothCombinedFilePath)
-
+  const bothCombinedArray = await csv({}).fromString(
+    combined_file_store[0].csv_string
+  )
   // Create an array of objects that sorts each object from the store into a subarray of objects using it's sample_group
   const sampleGroups = store.folders.reduce((acc, obj: any) => {
     const key = obj.sample_group;
-    if (!acc[key]) {
-      acc[key] = [];
-    }
+    if (!acc[key]) acc[key] = [];
     acc[key].push(obj);
     return acc;
   }, {});
-
   // Get amount of objects in sampleGroups
   const sampleGroupAmount = Object.keys(sampleGroups).length;
 
   if (sampleGroupAmount == 2) {
     // Create a new CSV
-    const csvWriter = await createCsvWriter({
-      path: await path.resolve(__dirname, `results/final/analysis.csv`),
+    const csvWriter = await createObjectCsvStringifier({
       header: [
         { id: 'gene_id', title: 'gene_id' },
         { id: 'gene_name', title: 'gene_name' },
@@ -320,59 +278,41 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
     let sampleGroup1 = await sampleGroups[Object.keys(sampleGroups).find(key => key == topGroup)]
     let sampleGroup2 = await sampleGroups[Object.keys(sampleGroups).find(key => key !== topGroup)]
 
-    /// Threshold Significance Filter
-    // Inquire with user if they would like to use the default threshold of 2, if not, followup and ask them for a number
-
     // Loop over each gene in the bothCombinedArray
     const AnalyzedObjectsArray = []
     let ObjectsRemoved = 0
-
-
     for (const gene of bothCombinedArray) {
       progressBar.detail = `Testing gene ${gene.gene_id} with threshold of ${threshold}` + `... (${((bothCombinedArray.indexOf(gene) + 1) / bothCombinedArray.length * 100).toFixed(0)}%)`
-      
+    
       // Create an array getting the values from gene in the column with the same name as the sample_group
       // Iteratate over sampleGroup1
       const sampleGroup1Values = []
       for (const sample of sampleGroup1) {
         await sampleGroup1Values.push(Number(gene[`${sample.sample_header}_log2`]))
       }
-
       // Iteratate over sampleGroup2
       const sampleGroup2Values = []
       for (const sample of sampleGroup2) {
         await sampleGroup2Values.push(Number(gene[`${sample.sample_header}_log2`]))
       }
-
-
-
-
       // Take average of each group and if one of the groups is equal to or greater than the threshold, then continue, otherwise skip gene
-
       const sampleGroup1Average = await sampleGroup1Values.reduce((a, b) => a + b, 0) / sampleGroup1Values.length;
       const sampleGroup2Average = await sampleGroup2Values.reduce((a, b) => a + b, 0) / sampleGroup2Values.length;
-
       if (sampleGroup1Average < threshold && sampleGroup2Average < threshold) {
         ObjectsRemoved++
         continue;
       }
-
       const test = await ttest2(sampleGroup1Values, sampleGroup2Values, {
         variance: 'equal',
       }).pValue;
-
       // - To get geo mean you take average in log space (normalized values), then take inverse 2 log of that - and that is geo mean (2^(A_B))
-
       // fold change is two to the power of (sample group 1 - sample group 2)
       const tempFoldChange = Math.pow(2, (sampleGroup1Average - sampleGroup2Average))
       const finalFoldChange = tempFoldChange < 1 ? -1 / tempFoldChange : tempFoldChange
-
-
       // if either the Geomean A, B, or fold change are NaN, retuirn error
       if (isNaN(finalFoldChange)) {
         throw new Error('One of the values in the analysis was NaN. Please try again.')
       }
-
 
       await AnalyzedObjectsArray.push({
         gene_id: gene.gene_id,
@@ -386,14 +326,11 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
     }
 
     progressBar.detail = `Calculating adjusted p values using Benjamini-Hochberg Procedure...`
-
     const pValuesArray = await AnalyzedObjectsArray.map((obj: any) => obj.p_value)
     const adjustedPValues = await padjust(pValuesArray, 'bh');
-
     for (let i = 0; i < AnalyzedObjectsArray.length; i++) {
       AnalyzedObjectsArray[i].adjusted_p_value = adjustedPValues[i];
     }
-
     for (let i = 0; i < AnalyzedObjectsArray.length; i++) {
       if (AnalyzedObjectsArray[i].adjusted_p_value < fdr) {
         AnalyzedObjectsArray[i].significant = 1;
@@ -401,17 +338,15 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
         AnalyzedObjectsArray[i].significant = 0;
       }
     }
-
     // Sort sheet by lowest adjusted p value
     AnalyzedObjectsArray.sort((a: any, b: any) => {
       return a.adjusted_p_value - b.adjusted_p_value;
     })
 
     // Write the new CSV
-    await csvWriter.writeRecords(AnalyzedObjectsArray)
-
-    // convert AnalyzedObjectsArray to CSV
-    
+    analysis_file_store.push({
+      csv_string: await csvWriter.getHeaderString() + '\t' + await csvWriter.stringifyRecords(AnalyzedObjectsArray),
+    })
   } else {
     throw new Error('Test type currently unsupported for more than two groups. Please try again with two groups.')
   }
@@ -421,9 +356,11 @@ const Report = async () => {
   // TODO: Prepare expression profile for ssGSEA based on linear results
 
   // Load linear_combined results into memory
-  const linearCombinedPath = await path.resolve(__dirname, `results/prelim/linear_combined.csv`)
-  const linearCombined = await csv().fromFile(linearCombinedPath);
+  const linearCombined = await csv({}).fromString(linear_file_store[0].csv_string)
   const geneCount = linearCombined.length;
+   
+  /*   
+  // GCT WORK START
 
   // Create a CSV with a master column in A1 with "#1.2"
   const GCTAnalysisPath = await path.resolve(__dirname, `results/final/analysis.gct`)
@@ -449,33 +386,24 @@ const Report = async () => {
   for (const gene of GCTAnalysisArray) {
     await fs.appendFileSync(GCTAnalysisPath, gene.join(','));
     await fs.appendFileSync(GCTAnalysisPath, '\n');
-  }
-  // read each file from the results/final folder looping through each file in that folder and push it to the files array
-  const finalPath = await path.resolve(__dirname, `results/final`)
-  const files = await fs.promises.readdir(
-    finalPath,
-  );
-  
-  const reportsPath = await path.resolve(__dirname, `results/reports`)
-  const reports = await fs.promises.readdir(
-   reportsPath,
-  );
+  } */
+
+
+
 
   const zip = new AdmZip();
-  // loop over every file in finalpath and add it to zip
-  for (const file of files) {
-    const filePath = await path.resolve(__dirname, `results/final/${file}`)
-    zip.addLocalFile(filePath);
-  }
+  
+  // load analysis_file_store[0].csv_string and reports_file_store[0].csv.string as seperate csv's
+  await csv({
+  }).fromString(analysis_file_store[0].csv_string)
 
-  for (const report of reports) {
-    const filePath = await path.resolve(__dirname, `results/reports/${report}`)
-    zip.addLocalFile(filePath);
-  }
+  await csv({
+  }).fromString(reports_file_store[0].csv_string)
+
+  zip.addFile("analysis.csv", Buffer.alloc(analysis_file_store[0].csv_string.length, analysis_file_store[0].csv_string), "analysis.csv");
+  zip.addFile("reports.csv", Buffer.alloc(reports_file_store[0].csv_string.length, reports_file_store[0].csv_string), "reports.csv");
 
   const final_file = await zip.toBuffer()
-  // delete results folder
-  await fs.rmSync(path.resolve(__dirname, `results`), { recursive: true });
   return final_file;
 }
 

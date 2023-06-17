@@ -32,7 +32,7 @@ if (isProd) {
 
   ipcMain.on('xpra-message', async (event, args) => {
     // TODO: Validate args on the main process for all functions below
-    const response = await XPRA(args);
+    const response: any = await XPRA(args, mainWindow);
     event.sender.send('xpra-reply', {
       time: new Date(),
       success: response.success,

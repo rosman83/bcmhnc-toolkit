@@ -34,7 +34,7 @@ function Shell(props) {
             <Link href={tool.path} className={`inline-block pb-3 p-2 px-6 ${ (route == tool.path) ? "active bg-gray-100 text-gray-600" : "transition duration-200 hover:bg-gray-300"}`}>{tool.name}</Link>
           </li>
         )))}
-        <li className="">
+        <li className="hidden">
             <Link href="/settings" className={`inline-block pb-3 p-2 px-6 flex items-center justify-center ${(route == '/settings') ? "active bg-gray-100 text-gray-600 " : "transition duration-200 hover:bg-gray-300"}`}>
               <Cog6ToothIcon className='inline-block w-5 h-5' />
           </Link>
