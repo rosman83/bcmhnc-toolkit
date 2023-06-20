@@ -65,7 +65,6 @@ if (isProd) {
     // write the file to the path
     fs.writeFile(filePath, args.content, (err) => {
       if (err) {
-        // trigger an alert
         dialog.showMessageBox({
           type: 'error',
           title: 'Error',

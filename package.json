@@ -1,7 +1,11 @@
 {
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rosman83/bcmhnc-toolkit"
+  },
   "name": "bcmhnc-toolkit",
-  "description": "...",
+  "description": "Tools used for Head and Neck Cancer research at Baylor College of Medicine, with a goal of condensing time-consuming manual pipelines of data analysis methods into one click scanning processes.",
   "version": "1.0.0",
   "author": "Rashid Osman <rashid.osman@vanderbilt.edu>",
   "main": "app/background.js",
@@ -19,7 +23,8 @@
     "build:win32": "nextron build --win --ia32",
     "build:win64": "nextron build --win --x64",
     "build:mac": "nextron build --mac --x64",
-    "build:linux": "nextron build --linux"
+    "build:linux": "nextron build --linux",
+    "release": "electron-builder -mwl --publish always"
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",
@@ -29,6 +34,8 @@
     "axios": "^1.4.0",
     "csv-writer": "^1.6.0",
     "csvtojson": "^2.0.10",
+    "dotenv": "^16.3.1",
+    "electron-builder-squirrel-windows": "^24.5.0",
     "electron-progressbar": "^2.1.0",
     "electron-serve": "^1.1.0",
     "electron-settings": "^4.0.2",
@@ -47,7 +54,7 @@
     "@types/react": "^18.0.26",
     "autoprefixer": "^10.4.14",
     "electron": "^21.3.3",
-    "electron-builder": "^23.6.0",
+    "electron-builder": "^24.4.0",
     "next": "^13.4.4",
     "nextron": "^8.5.0",
     "postcss-loader": "^7.3.0",

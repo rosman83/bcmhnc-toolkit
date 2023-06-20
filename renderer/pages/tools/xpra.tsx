@@ -46,20 +46,17 @@ function XPRA() {
       setReports([...reports, newReport]);
       setLoading(false);
 
-      if (!arg.success) {
-        return alert(arg.error);
-      }
+      if (!arg.success) return alert(arg.error);
       
-      if (arg.file) {
-        return ipcRenderer.send('save-file', {
-          title: 'Save XPRA Report',
-          defaultPath: 'report.zip',
-          filters: [
-            { name: 'ZIP Files', extensions: ['zip'] },
-          ],
-          content: arg.file,
-        });
-      }
+      return ipcRenderer.send('save-file', {
+        title: 'Save XPRA Report',
+        defaultPath: 'report.zip',
+        filters: [
+          { name: 'ZIP Files', extensions: ['zip'] },
+        ],
+        content: arg.file,
+      });
+      
     });
   }
 

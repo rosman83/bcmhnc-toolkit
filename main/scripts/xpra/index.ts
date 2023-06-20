@@ -358,7 +358,7 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
       // fold change is two to the power of (sample group 1 - sample group 2)
       const tempFoldChange = Math.pow(2, (sampleGroup1Average - sampleGroup2Average))
       const finalFoldChange = tempFoldChange < 1 ? -1 / tempFoldChange : tempFoldChange
-      // if either the Geomean A, B, or fold change are NaN, retuirn error
+      // if either the Geomean A, B, or fold change are NaN, return error
       if (isNaN(finalFoldChange)) {
         throw new Error('One of the values in the analysis was NaN. Please try again.')
       }
