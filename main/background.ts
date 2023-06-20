@@ -35,7 +35,7 @@ if (isProd) {
       const response: any = await XPRA(args, mainWindow);
       return event.sender.send('xpra-reply', {
         success: true,
-        file: response.file,
+        file: response.message,
       })
     } catch (e) {
       return event.sender.send('xpra-reply', {

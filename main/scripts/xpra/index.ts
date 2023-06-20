@@ -2,9 +2,8 @@ import path from "path";
 import csv from 'csvtojson';
 import padjust from '@stdlib/stats-padjust';
 import ttest2 from '@stdlib/stats-ttest2';
-import AdmZip from "adm-zip";
+import JSZip from "jszip";
 import { createObjectCsvStringifier } from "csv-writer";
-
 // TODO: Change all string usage to use buffer before and after storage and use memory elimination and clearing
 
 
@@ -21,7 +20,7 @@ const store: DataStore = {
   master_path: '',
   folders: [],
 };
-
+  
 const prelim_results = [];
 const reports_file_store = [];
 const combined_file_store = [];
@@ -432,17 +431,14 @@ const Report = async () => {
    
   // END GCT WORK -------------------------
 
-  const zip = new AdmZip();
-  
-  // load analysis_file_store[0].csv_string and reports_file_store[0].csv.string as seperate csv's
-  await csv({}).fromString(analysis_file_store[0].csv_string)
-  await zip.addFile("analysis.csv", Buffer.alloc(analysis_file_store[0].csv_string.length, analysis_file_store[0].csv_string), "final_analysis.csv");
-  await csv({}).fromString(reports_file_store[0].csv_string)
-  await zip.addFile("reports.csv", Buffer.alloc(reports_file_store[0].csv_string.length, reports_file_store[0].csv_string), "edge_case_reports.csv");
-  await csv({}).fromString(gct_file_store[0].csv_string)
-  await zip.addFile("gct_file.gct", Buffer.alloc(gct_file_store[0].csv_string.length, gct_file_store[0].csv_string), "final_analysis.gct");
-  const final_file = await zip.toBuffer()
+  const zip = new JSZip();
+  await zip.file("analysis.csv", Buffer.alloc(analysis_file_store[0].csv_string.length, analysis_file_store[0].csv_string));
+  await zip.file("reports.csv", Buffer.alloc(reports_file_store[0].csv_string.length, reports_file_store[0].csv_string));
+  await zip.file("gct_file.gct", Buffer.alloc(gct_file_store[0].csv_string.length, gct_file_store[0].csv_string));
+
+  const final_file = await zip.generateAsync({ type: "nodebuffer" });
   return final_file;
+
 }
 
 export default XPRA;

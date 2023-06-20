@@ -47,6 +47,8 @@ function XPRA() {
       setLoading(false);
 
       if (!arg.success) return alert(arg.error);
+      if (arg.file == undefined) return alert("No file was returned from the server");
+    
       
       return ipcRenderer.send('save-file', {
         title: 'Save XPRA Report',
