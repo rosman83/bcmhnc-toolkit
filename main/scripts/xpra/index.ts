@@ -1,10 +1,12 @@
 import path from "path";
 import csv from 'csvtojson';
-import fs from "fs"
 import padjust from '@stdlib/stats-padjust';
 import ttest2 from '@stdlib/stats-ttest2';
 import AdmZip from "adm-zip";
-import { createArrayCsvStringifier, createObjectCsvStringifier } from "csv-writer";
+import { createObjectCsvStringifier } from "csv-writer";
+
+// TODO: Change all string usage to use buffer before and after storage and use memory elimination and clearing
+
 
 const ProgressBar = require('electron-progressbar');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
@@ -26,15 +28,15 @@ const combined_file_store = [];
 const linear_file_store = [];
 const log2_file_store = [];
 const analysis_file_store = [];
+const gct_file_store = [];
 
 async function XPRA(args, mainWindow) {
   const progressBar = new ProgressBar({
     indeterminate: true,
-    text: 'Preparing to analyze data...',
+    text: 'Analyzing data...',
     detail: 'Please wait...',
     browserWindow: {
       parent: mainWindow,
-      modal: true,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
@@ -42,19 +44,69 @@ async function XPRA(args, mainWindow) {
     },
   });
 
-  await Checker(args.files, args.ext, progressBar);
-  await Reader(progressBar);
-  await Combine(progressBar);
-  await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
-  const file = await Report();
-  progressBar.setCompleted();
+  try {
+    await Checker(args.files, args.ext, progressBar);
+    await Validate(args.files, progressBar);
+    await Reader(progressBar);
+    await Combine(progressBar);
+    await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
+    const file = await Report();
+    await progressBar.setCompleted();
 
-  return {
-    success: true,
-    file: file,
+    return {
+      success: true,
+      message: file,
+    }
+  } catch (e) {
+    await progressBar.close();
+    throw new Error(e.message)
   }
 }
 
+const Validate = async (files, progressBar) => {
+  progressBar.detail = 'Validating the files you provided...';
+  if (files.length < 2) throw new Error("Please select at least two files");
+
+  for (let i = 0; i < files.length; i++) {
+    await csv({
+      delimiter: '\t',
+    }).fromFile(files[i].sample_path).then(async (jsonObj) => {
+      // @check 1 - Ensure that these following columns exist in the CSV: gene_id	transcript_id(s)	length	effective_length	expected_count	TPM	FPKM
+      if (!jsonObj[0].hasOwnProperty("gene_id")) throw new Error("Error: gene_id column not found in file " + files[i].sample_name);
+
+      if (!jsonObj[0].hasOwnProperty("transcript_id(s)")) throw new Error("Error: transcript_id(s) column not found in file " + files[i].sample_name);
+
+      if (!jsonObj[0].hasOwnProperty("length")) throw new Error("Error: length column not found in file " + files[i].sample_name)
+
+      if (!jsonObj[0].hasOwnProperty("effective_length")) throw new Error("Error: effective_length column not found in file " + files[i].sample_name)
+
+      if (!jsonObj[0].hasOwnProperty("expected_count")) throw new Error("Error: expected_count column not found in file " + files[i].sample_name)
+
+      if (!jsonObj[0].hasOwnProperty("TPM")) throw new Error("Error: TPM column not found in file " + files[i].sample_name)
+
+      if (!jsonObj[0].hasOwnProperty("FPKM")) throw new Error("Error: FPKM column not found in file " + files[i].sample_name)
+
+      // @check2 Ensure all gene ID's are unique
+      let gene_ids = [];
+      for (let j = 0; j < jsonObj.length; j++)  gene_ids.push(jsonObj[j].gene_id);
+      if (gene_ids.length !== new Set(gene_ids).size) throw new Error("Error: gene_id column contains duplicate values in file " + files[i].sample_name)
+
+      //@check3 check to make sure there are only two groups, (temporary until we code in higher group support)
+      const sampleGroups = store.folders.reduce((acc, obj: any) => {
+        const key = obj.sample_group;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(obj);
+        return acc;
+      }, {});
+      const sampleGroupAmount = Object.keys(sampleGroups).length;
+      if (sampleGroupAmount != 2) throw new Error("Error: only two groups are supported at this time, please select two groups and try again.");
+
+      // TODO: Add any more potential checks here that are needed.
+      progressBar.detail = 'All files are in the correct format, continuing...';
+    });
+  }
+
+}
 const Checker = async (files, ext, progressBar) => {
   const scannedFiles = [];
   async function getFormattedEXT() {
@@ -74,7 +126,6 @@ const Checker = async (files, ext, progressBar) => {
   store.folders = scannedFiles;
   progressBar.detail = 'Finished scanning files...';
 }
-
 const Reader = async (progressBar) => {
   for (const folderobj of store.folders as any) {
     let folder = folderobj.sample_header;
@@ -117,7 +168,6 @@ const Reader = async (progressBar) => {
 
   }
 }
-
 const Combine = async (progressBar) => {
   progressBar.detail = 'Setting file paths for thresholded testing...';
   let filteredArray = [];
@@ -246,7 +296,6 @@ const Combine = async (progressBar) => {
   log2_file_store.push({ csv_string: await log2Writer.getHeaderString() + '\t' +await log2Writer.stringifyRecords(log2Array) });
   combined_file_store.push({ csv_string: await combinedWriter.getHeaderString() + '\t' + await combinedWriter.stringifyRecords(combinedArray) });
 }
-
 const Analysis = async (threshold, fdr, topGroup, progressBar) => {
   const bothCombinedArray = await csv({}).fromString(
     combined_file_store[0].csv_string
@@ -351,19 +400,16 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
     throw new Error('Test type currently unsupported for more than two groups. Please try again with two groups.')
   }
 }
-
 const Report = async () => {
-  // TODO: Prepare expression profile for ssGSEA based on linear results
+  // TODO: Prepare expression profile for ssGSEA based on linear results?? - What did I mean by this
 
   // Load linear_combined results into memory
   const linearCombined = await csv({}).fromString(linear_file_store[0].csv_string)
   const geneCount = linearCombined.length;
    
-  /*   
-  // GCT WORK START
+  // GCT WORK START --------------------
 
   // Create a CSV with a master column in A1 with "#1.2"
-  const GCTAnalysisPath = await path.resolve(__dirname, `results/final/analysis.gct`)
   const folderscnt = await store.folders.map((folder: any) => folder.sample_header)
   const csvContent = `#1.2\n${geneCount},${folderscnt.length}\nName,Description,${folderscnt.join(',')}`;
   const csvBuffer = Buffer.from(csvContent, 'utf8');
@@ -378,31 +424,23 @@ const Report = async () => {
     await GCTAnalysisArray.push([gene.symbol, gene.symbol, ...allSampleValues])
   }
 
-  await fs.writeFileSync(GCTAnalysisPath, csvBuffer, { flag: 'w' });
-  await fs.appendFileSync(GCTAnalysisPath, '\n');
-
-  // Append GTCAnalysisArray to the CSVBuffer and write to the GCTAnalysisPath
-
-  for (const gene of GCTAnalysisArray) {
-    await fs.appendFileSync(GCTAnalysisPath, gene.join(','));
-    await fs.appendFileSync(GCTAnalysisPath, '\n');
-  } */
-
-
-
+  // Create a string CSV starting with csvContent, and then for each item in GCTAnalysisArray, add a new line where every value is seperated by a comma - Ensure that each item in the array is a new row in the CSV - Joining the array alone will not work as it will cause everything to be in the same line
+  const GCTAnalysisString = await csvBuffer.toString() + '\n' + await GCTAnalysisArray.map((item: any) => item.join(',')).join('\n')
+  gct_file_store.push({
+    csv_string: GCTAnalysisString
+  })
+   
+  // END GCT WORK -------------------------
 
   const zip = new AdmZip();
   
   // load analysis_file_store[0].csv_string and reports_file_store[0].csv.string as seperate csv's
-  await csv({
-  }).fromString(analysis_file_store[0].csv_string)
-
-  await csv({
-  }).fromString(reports_file_store[0].csv_string)
-
-  zip.addFile("analysis.csv", Buffer.alloc(analysis_file_store[0].csv_string.length, analysis_file_store[0].csv_string), "analysis.csv");
-  zip.addFile("reports.csv", Buffer.alloc(reports_file_store[0].csv_string.length, reports_file_store[0].csv_string), "reports.csv");
-
+  await csv({}).fromString(analysis_file_store[0].csv_string)
+  await zip.addFile("analysis.csv", Buffer.alloc(analysis_file_store[0].csv_string.length, analysis_file_store[0].csv_string), "final_analysis.csv");
+  await csv({}).fromString(reports_file_store[0].csv_string)
+  await zip.addFile("reports.csv", Buffer.alloc(reports_file_store[0].csv_string.length, reports_file_store[0].csv_string), "edge_case_reports.csv");
+  await csv({}).fromString(gct_file_store[0].csv_string)
+  await zip.addFile("gct_file.gct", Buffer.alloc(gct_file_store[0].csv_string.length, gct_file_store[0].csv_string), "final_analysis.gct");
   const final_file = await zip.toBuffer()
   return final_file;
 }

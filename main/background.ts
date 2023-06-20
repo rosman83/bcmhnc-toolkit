@@ -31,13 +31,18 @@ if (isProd) {
   })
 
   ipcMain.on('xpra-message', async (event, args) => {
-    // TODO: Validate args on the main process for all functions below
-    const response: any = await XPRA(args, mainWindow);
-    event.sender.send('xpra-reply', {
-      time: new Date(),
-      success: response.success,
-      file: response.file,
-    })
+    try {
+      const response: any = await XPRA(args, mainWindow);
+      return event.sender.send('xpra-reply', {
+        success: true,
+        file: response.file,
+      })
+    } catch (e) {
+      return event.sender.send('xpra-reply', {
+        success: false,
+        error: e.message,
+      })
+    };
   })
 
   ipcMain.on('ssgsea-message', async (event, args) => {
@@ -60,14 +65,20 @@ if (isProd) {
     // write the file to the path
     fs.writeFile(filePath, args.content, (err) => {
       if (err) {
-        console.log(err);
+        // trigger an alert
+        dialog.showMessageBox({
+          type: 'error',
+          title: 'Error',
+          message: 'An error occurred while saving the file.',
+          detail: err.message,
+        });
       }
     });
   })
 
   const mainWindow = createWindow('main', {
-    width: 1000,
-    height: 600,
+    width: 900,
+    height: 700,
   });
 
   if (isProd) {

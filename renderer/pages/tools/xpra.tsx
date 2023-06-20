@@ -6,8 +6,8 @@ import Loading from "../../components/loading";
 import { ResultsLog } from "../../components/results";
 import { useRecoilState } from "recoil";
 import { XPRA_ext, XPRA_fdr, XPRA_files, XPRA_loading, XPRA_reports, XPRA_threshold, XPRA_topGroup, XPRA_uniqueGroups } from "../../state/store";
-
 // Migrate to https://github.com/rpldy/react-uploady to prepare for production? 
+// TODO: Fix the akward typing into the input boxes state management error also caused by this...
 
 function XPRA() {
   // State for directory path
@@ -21,10 +21,6 @@ function XPRA() {
   const [reports, setReports] = useRecoilState(XPRA_reports);
 
   const handleRun = async () => {
-    if (topGroup == "" || topGroup == undefined) {
-      alert("Please select a top group");
-      return;
-    }
 
     await ipcRenderer.send('xpra-message', {
       files: files.map((file) => {
@@ -43,27 +39,30 @@ function XPRA() {
     setLoading(true);
 
     ipcRenderer.once('xpra-reply', (event, arg) => {
+      const newReport = {
+        time: new Date(),
+        success: arg.success,
+      }
+      setReports([...reports, newReport]);
+      setLoading(false);
+
+      if (!arg.success) {
+        return alert(arg.error);
+      }
       
-    const newReport = {
-      time: arg.time,
-      success: arg.success,
-    }
-      
-    // for each file in files array, prompt user to save file to disk using window
-        ipcRenderer.send('save-file', {
+      if (arg.file) {
+        return ipcRenderer.send('save-file', {
           title: 'Save XPRA Report',
           defaultPath: 'report.zip',
           filters: [
             { name: 'ZIP Files', extensions: ['zip'] },
           ],
           content: arg.file,
-        }); 
-      
-    setReports([...reports, newReport]);
-    setLoading(false);
-  });
+        });
+      }
+    });
   }
-  
+
   const Setting = function (props) {
     if (props.decimal) {
       return (
@@ -77,7 +76,7 @@ function XPRA() {
               if (Number(e.target.value) < 0) {
                 e.target.value = "0";
               }
-              
+
               props.set(e.target.value);
             }}
             type='number' className='p-2 bg-gray-100 rounded-md' />
@@ -89,7 +88,7 @@ function XPRA() {
       return (
         <div className='pl-4 gap-3 flex flex-row items-center pt-3'>
           <label className='font-xs'>{props.label}:</label>
-          <input required onChange={ 
+          <input required onChange={
             (e) => {
               if (Number(e.target.value) < 0) {
                 e.target.value = "0";
@@ -109,13 +108,13 @@ function XPRA() {
           <select required value={props.val} onChange={(e) => {
             setFiles([]);
             props.set(e.target.value);
-            }}
-              className='p-2 bg-gray-100 rounded-md'>
-              {props.options.map((option, i) => (
-                <option key={i} value={option.toLowerCase()}>{option}</option>
-              ))}
-            </select>
-          </div>
+          }}
+            className='p-2 bg-gray-100 rounded-md'>
+            {props.options.map((option, i) => (
+              <option key={i} value={option.toLowerCase()}>{option}</option>
+            ))}
+          </select>
+        </div>
       )
     }
 
@@ -129,12 +128,12 @@ function XPRA() {
           <label className='font-xs'>{props.label}:</label>
           <select required value={props.val} onChange={(e) => {
             props.set(e.target.value);
-            }}
+          }}
             className='p-2 bg-gray-100 rounded-md'>
-              {(props.options.map((option, i) => (
-                <option key={i}  value={option}>{option}</option>
-              )))}
-            </select>
+            {(props.options.map((option, i) => (
+              <option key={i} value={option}>{option}</option>
+            )))}
+          </select>
         </div>
       )
     }
@@ -163,8 +162,8 @@ function XPRA() {
               );
               setUniqueGroups(unique);
 
-            }} 
-            value={(files.filter((file) => {  
+            }}
+            value={(files.filter((file) => {
               return file.file.name === props.label;
             })[0] || { file: { sample_group: "" } }).file.sample_group}
           />
@@ -233,9 +232,9 @@ function XPRA() {
                     <Setting key={i} group={true} label={file.file.name} />
                   ))}
                 </div>
-                  <div className='flex flex-row bg-white pt-1 pb-4 gap-3'>
-                    <Setting options={uniqueGroups} top={true} val={topGroup} set={setTopGroup} label='Select top group for fold change calculation'/>
-                  </div>
+                <div className='flex flex-row bg-white pt-1 pb-4 gap-3'>
+                  <Setting options={uniqueGroups} top={true} val={topGroup} set={setTopGroup} label='Select top group for fold change calculation' />
+                </div>
               </div>
             </div>
           }
@@ -246,13 +245,13 @@ function XPRA() {
             </div>
           }
           {files.length > 0 &&
-            <ResultsLog 
+            <ResultsLog
               reports={reports}
               func={handleFunc}
             />
           }
-        </form> 
-        }
+        </form>
+      }
     </>
   )
 }

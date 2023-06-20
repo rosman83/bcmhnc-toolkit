@@ -8,7 +8,6 @@ import { ipcRenderer } from 'electron';
 import useRunOnce from '../state/hooks';
 
 function MyApp({ Component, pageProps }: AppProps) {
-  
   return (
     <RecoilRoot>
       <Shell>

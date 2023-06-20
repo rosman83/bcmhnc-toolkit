@@ -54,16 +54,16 @@ const SearchScroll = (props) => {
 
 const SearchItem = (props) => {
   return (
-    <div className='flex flex-col gap-3 w-full'>
+    <Link href={props.path} className='flex flex-col gap-3 w-full'>
           <div className='flex flex-col gap-2'>
               <div className="bg-primary grid grid-cols-1 divide-y px-3 py-3 text-gray-200 select-none transition duration-50 hover:scale-[101%] hover:text-white cursor-pointer">
-              <Link href={props.path} className='text-md font-semibold mb-2'>{props.name}</Link>
+              <div className='text-md font-semibold mb-2'>{props.name}</div>
                 <div className='pt-2'>
                   <p className='text-sm truncate'>{props.description}</p>
                 </div>
               </div>
             
           </div>
-        </div>
+        </Link>
   );
 }
