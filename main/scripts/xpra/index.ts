@@ -6,6 +6,7 @@ import JSZip from "jszip";
 import { createObjectCsvStringifier } from "csv-writer";
 // TODO: Change all string usage to use buffer before and after storage and use memory elimination and clearing
 
+//TODO: On error, clear the state so that people can type again...
 
 const ProgressBar = require('electron-progressbar');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
@@ -49,7 +50,7 @@ async function XPRA(args, mainWindow) {
     await Reader(progressBar);
     await Combine(progressBar);
     await Analysis(args.threshold, args.fdr, args.topGroup, progressBar);
-    const file = await Report();
+    const file = await Report(args.topGroup);
     await progressBar.setCompleted();
 
     return {
@@ -167,11 +168,14 @@ const Reader = async (progressBar) => {
 
   }
 }
+// reused global vars
+let modifiedLog2Headers = [];
+let globalCol = null;
 const Combine = async (progressBar) => {
   progressBar.detail = 'Setting file paths for thresholded testing...';
+  const headers = [];
   let filteredArray = [];
   let reportedgenes = [];
-  const headers = [];
   const linearArray = [];
   const log2Array = [];
   const combinedArray = [];
@@ -196,7 +200,7 @@ const Combine = async (progressBar) => {
       ...headers
     ]
   });
-  const modifiedLog2Headers = headers.map((header) => {
+  modifiedLog2Headers = headers.map((header) => {
     return { id: header.id + '_log2', title: header.id + '_log2' }
   })
   const combinedWriter = createObjectCsvStringifier({
@@ -275,6 +279,8 @@ const Combine = async (progressBar) => {
     linearArray.sort((a, b) => (a.symbol > b.symbol) ? 1 : -1);
     log2Array.sort((a, b) => (a.symbol > b.symbol) ? 1 : -1);
     combinedArray.sort((a, b) => (a.symbol > b.symbol) ? 1 : -1);
+    // for use later in the analysis function
+    globalCol = combinedArray;
   }
 
   const reportWriter = await createObjectCsvStringifier({
@@ -320,8 +326,16 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
         { id: 'p_value', title: 'p_value' },
         { id: 'adjusted_p_value', title: 'adjusted_p_value' },
         { id: 'significant', title: 'significant' },
+        // EXTRA INFO
+        { id: 'group_a_mean_log2', title: 'Group A mean log2' },
+        { id: 'group_b_mean_log2', title: 'Group B mean log2' },  
+        // all headers to include log2 values matching that gene for the sample in the style of that seen in combinedWriter
+        ...modifiedLog2Headers
       ]
     });
+
+    // test to check mapping of headers
+    console.log(csvWriter.getHeaderString())
 
     let sampleGroup1 = await sampleGroups[Object.keys(sampleGroups).find(key => key == topGroup)]
     let sampleGroup2 = await sampleGroups[Object.keys(sampleGroups).find(key => key !== topGroup)]
@@ -359,17 +373,24 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
       const finalFoldChange = tempFoldChange < 1 ? -1 / tempFoldChange : tempFoldChange
       // if either the Geomean A, B, or fold change are NaN, return error
       if (isNaN(finalFoldChange)) {
-        throw new Error('One of the values in the analysis was NaN. Please try again.')
+        // log everything relevant to the error
+        console.log('sampleGroup1Values: ', sampleGroup1Values)
+        console.log('sampleGroup2Values: ', sampleGroup2Values)
+        console.log('sampleGroup1Average: ', sampleGroup1Average)
+        console.log('sampleGroup2Average: ', sampleGroup2Average)
+        console.log('tempFoldChange: ', tempFoldChange)
+        console.log('finalFoldChange: ', finalFoldChange)
+        console.log('gene: ', gene)
+
+        throw new Error(`One of the values in the analysis of gene ${gene.gene_id} (${gene.gene_symbol}) was NaN. Please try again`)
       }
 
       await AnalyzedObjectsArray.push({
-        gene_id: gene.gene_id,
-        gene_name: gene.gene_name,
-        symbol: gene.symbol,
+        ...gene,
         fold_change: Number(finalFoldChange),
         p_value: Number(test),
         adjusted_p_value: null,
-        significant: null
+        significant: null,
       })
     }
 
@@ -391,6 +412,35 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
       return a.adjusted_p_value - b.adjusted_p_value;
     })
 
+    // TODO: Add averages to the analysis of both groups using cumulative values
+    // get average of all log2 values from every gene contained in every sample of sampleGroup1, should be one value in the end
+    let group_a_sample_log2_values = []
+    for (const sample of sampleGroup1) {
+      for (const gene of bothCombinedArray) {
+        group_a_sample_log2_values.push(Number(gene[`${sample.sample_header}_log2`]))
+      }
+    }
+    const group_a_average = await group_a_sample_log2_values.reduce((a, b) => a + b, 0) / group_a_sample_log2_values.length;
+
+    // get average of all log2 values from every gene contained in every sample of sampleGroup2, should be one value in the end
+    let group_b_sample_log2_values = []
+    for (const sample of sampleGroup2) {
+      for (const gene of bothCombinedArray) {
+        group_b_sample_log2_values.push(Number(gene[`${sample.sample_header}_log2`]))
+      }
+    }
+    const group_b_average = await group_b_sample_log2_values.reduce((a, b) => a + b, 0) / group_b_sample_log2_values.length;
+
+    // set the group_a_average and group_b_average of the first object in the array only
+    AnalyzedObjectsArray[0].group_a_mean_log2 = group_a_average
+    AnalyzedObjectsArray[0].group_b_mean_log2 = group_b_average
+
+    // TODO: merge data showing original values for each sample in each group to the right of sheet
+
+    // log 2 important objects
+    console.log(AnalyzedObjectsArray[0])
+    console.log(AnalyzedObjectsArray[1])
+
     // Write the new CSV
     analysis_file_store.push({
       csv_string: await csvWriter.getHeaderString() + '\t' + await csvWriter.stringifyRecords(AnalyzedObjectsArray),
@@ -399,7 +449,7 @@ const Analysis = async (threshold, fdr, topGroup, progressBar) => {
     throw new Error('Test type currently unsupported for more than two groups. Please try again with two groups.')
   }
 }
-const Report = async () => {
+const Report = async (topGroup) => {
   // TODO: Prepare expression profile for ssGSEA based on linear results?? - What did I mean by this
 
   // Load linear_combined results into memory
@@ -430,7 +480,6 @@ const Report = async () => {
   })
    
   // END GCT WORK -------------------------
-
   const zip = new JSZip();
   await zip.file("analysis.csv", Buffer.alloc(analysis_file_store[0].csv_string.length, analysis_file_store[0].csv_string));
   await zip.file("reports.csv", Buffer.alloc(reports_file_store[0].csv_string.length, reports_file_store[0].csv_string));
